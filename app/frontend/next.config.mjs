@@ -20,12 +20,19 @@ const nextConfig = {
     unoptimized: true,
   },
   output: 'standalone',
-  // Keep experimental features off in dev containers to avoid instability/timeouts
-  experimental: process.env.NODE_ENV === 'production' ? {
-    webpackBuildWorker: true,
-    parallelServerBuildTraces: true,
-    parallelServerCompiles: true,
-  } : {},
+  // Keep experimental features off in dev containers to avoid instability/timeouts.
+  // The dev rewrite proxy buffers request bodies and defaults to 10MB. Uploads
+  // larger than that arrive truncated, so Flask never sees the file field.
+  experimental: {
+    proxyClientMaxBodySize: process.env.NEXT_PUBLIC_MAX_FILE_SIZE || '1gb',
+    ...(process.env.NODE_ENV === 'production'
+      ? {
+          webpackBuildWorker: true,
+          parallelServerBuildTraces: true,
+          parallelServerCompiles: true,
+        }
+      : {}),
+  },
   // Proxy API requests to backend (for development)
   // Note: WebSocket connections need to go directly to backend - Next.js rewrites don't support WS upgrades
   // In production, nginx handles routing so these rewrites are not used
