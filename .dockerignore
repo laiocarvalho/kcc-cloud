@@ -1,0 +1,15 @@
+.git
+.github
+.venv
+venv
+app/frontend
+docs
+volumes
+**/__pycache__
+**/.pytest_cache
+**/*.pyc
+**/.next
+**/node_modules
+*.log
+.idea
+.vscode

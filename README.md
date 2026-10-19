@@ -177,6 +177,8 @@ Access all your completed conversions with download links, file details, and the
 
 ## 🚀 Quick Start
 
+To run this repository locally with Docker Compose, see [README.local.md](README.local.md).
+
 ### Prerequisites
 
 - Docker & Docker Compose installed

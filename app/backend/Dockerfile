@@ -23,6 +23,7 @@ RUN echo "deb http://cdn-fastly.deb.debian.org/debian trixie main contrib non-fr
     echo "Acquire::Retries \"3\";" > /etc/apt/apt.conf.d/80-retries && \
     echo "Acquire::http::Timeout \"90\";" >> /etc/apt/apt.conf.d/80-retries && \
     echo "Acquire::ftp::Timeout \"90\";" >> /etc/apt/apt.conf.d/80-retries && \
+    dpkg --add-architecture i386 && \
     apt-get update && apt-get install -y --no-install-recommends \
     p7zip-full \
     unar \
@@ -37,6 +38,9 @@ RUN echo "deb http://cdn-fastly.deb.debian.org/debian trixie main contrib non-fr
     python3-dev \
     libev-dev \
     git \
+    libc6:i386 \
+    libstdc++6:i386 \
+    zlib1g:i386 \
     && rm -rf /var/lib/apt/lists/*
 
 # Upgrade pip

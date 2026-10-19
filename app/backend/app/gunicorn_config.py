@@ -6,6 +6,8 @@ is shared (and broken) in child processes. This post_fork hook closes the connec
 after each fork, forcing Celery to create fresh connections in each worker.
 """
 
+import os
+
 
 def post_fork(server, worker):
     """
@@ -21,7 +23,9 @@ bind = "0.0.0.0:8060"
 workers = 1  # Use 1 worker for simplicity with WebSockets
 worker_class = "eventlet"  # Required for Socket.IO
 worker_connections = 1000
-timeout = 120  # Increased timeout to 120 seconds to prevent worker timeouts for long-running tasks
+# .env / compose set these. Defaults match the previous hardcoded values.
+timeout = int(os.environ.get("GUNICORN_TIMEOUT", "120"))
+graceful_timeout = int(os.environ.get("GUNICORN_GRACEFUL_TIMEOUT", "120"))
 
 # Logging
 accesslog = "-"
