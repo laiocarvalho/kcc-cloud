@@ -133,7 +133,7 @@ function convertAdvancedOptionsToBackend(options: AdvancedOptionsType) {
   if (options.gamma && options.gamma !== FRONTEND_DEFAULTS.gamma) {
     result.gamma = options.gamma
   }
-  if (options.outputFormat !== FRONTEND_DEFAULTS.outputFormat) {
+  if (options.outputFormat && options.outputFormat !== FRONTEND_DEFAULTS.outputFormat) {
     result.output_format = options.outputFormat
   }
   if (options.author && options.author !== FRONTEND_DEFAULTS.author) {
@@ -447,8 +447,17 @@ export function MangaConverter({ contentType }: { contentType: "comic" | "manga"
               // legacy worker download speed removed
               // Set queuedAt timestamp when job first enters QUEUED status
               queuedAt: job.status === "QUEUED" && f.status !== "QUEUED" ? Date.now() : f.queuedAt,
-              // Set error flag for ERRORED jobs
-              error: job.status === "ERRORED" ? true : f.error,
+              // Set error flag for ERRORED jobs (keep the backend's reason when available)
+              error: job.status === "ERRORED" ? job.error_message || true : f.error,
+            }
+
+            // Tell the user why a conversion failed (once, on the transition to ERRORED)
+            if (job.status === "ERRORED" && f.status !== "ERRORED") {
+              toast.error(`Conversion failed: ${f.name}`, {
+                description: job.error_message || "The converter did not produce the requested file.",
+                duration: 15000,
+                id: `job-error-${job.job_id}`, // dedupe (updater may run twice)
+              })
             }
 
             // Handle completion

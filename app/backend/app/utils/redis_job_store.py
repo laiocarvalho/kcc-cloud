@@ -401,6 +401,9 @@ class RedisJobStore:
                     "file_size": _filesize_int,
                     "created_at": _created,
                 }
+                # Surface why a job failed (e.g. KindleGen could not build the MOBI)
+                if raw_status == "ERRORED" and job_data.get("error_message"):
+                    job_dict["error_message"] = str(job_data.get("error_message"))
 
                 # Backfill from DB if filename/size missing
                 try:

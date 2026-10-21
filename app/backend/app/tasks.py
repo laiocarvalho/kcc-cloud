@@ -9,6 +9,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import zipfile
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -20,6 +21,13 @@ from utils.command_generator import generate_kcc_command
 from utils.socketio_broadcast import broadcast_queue_update
 from utils.redis_job_store import RedisJobStore
 from utils.generated_estimator import estimate_from_job
+from utils.kcc_formats import (
+    ConversionOutputError,
+    effective_format,
+    expected_extensions,
+    kcc_error_lines,
+    pick_outputs,
+)
 
 # Setup simple logging
 logging.basicConfig(
@@ -254,27 +262,59 @@ def convert_comic_task(self, job_id):
             env=env,
         )
 
-        # Stream output
+        # Stream output (kept so failures KCC only prints can be surfaced)
+        kcc_output_lines = []
         for line in process.stdout:
             logger.info(f"KCC: {line.rstrip()}")
+            kcc_output_lines.append(line.rstrip())
 
         process.wait()
 
+        kcc_errors = kcc_error_lines(kcc_output_lines)
         if process.returncode != 0:
-            raise RuntimeError(f"KCC conversion failed with return code {process.returncode}")
+            detail = f": {kcc_errors[0]}" if kcc_errors else ""
+            raise RuntimeError(
+                f"KCC conversion failed with return code {process.returncode}{detail}"
+            )
 
         # Calculate conversion duration
         end_time = datetime.now(timezone.utc)
         job.actual_duration = int((end_time - start_time).total_seconds())
 
-        # Find output file
-        output_files = list(Path(temp_dir).glob("*"))
-        output_files = [f for f in output_files if f.is_file() and not f.name.startswith(".")]
+        # Find output file(s) of the format that was actually requested.
+        # KCC exits 0 even when KindleGen fails and leaves the intermediate EPUB behind,
+        # so never fall back to "whatever file is there".
+        fmt = effective_format(options.get("output_format"), job.device_profile)
+        wanted_exts = expected_extensions(fmt, job.device_profile, bool(options.get("no_kepub")))
+        all_files = [f for f in Path(temp_dir).glob("*") if f.is_file() and not f.name.startswith(".")]
+        output_files = pick_outputs(all_files, wanted_exts)
+        primary_files = [f for f in output_files if f.name.lower().endswith(wanted_exts[0])]
 
-        if not output_files:
-            raise FileNotFoundError("No output file produced by KCC")
+        if not primary_files:
+            found = ", ".join(sorted(f.name for f in all_files)) or "nothing"
+            reason = "; ".join(kcc_errors[:3]) if kcc_errors else "no error reported by KCC"
+            raise ConversionOutputError(
+                f"Requested {fmt} output ({wanted_exts[0]}) was not produced (found: {found}). "
+                f"KCC said: {reason}"
+            )
+        if kcc_errors:
+            # The requested file exists, so only warn (e.g. "Failed to tweak KindleGen output")
+            logger.warning(f"KCC reported errors but produced {fmt} output: {kcc_errors[:3]}")
 
-        output_file = output_files[0]
+        if len(output_files) == 1:
+            output_file = output_files[0]
+        else:
+            # Several volumes (KCC always splits big MOBIs) or MOBI+EPUB: deliver all of them
+            zip_path = Path(temp_dir) / ".bundle" / f"{Path(job.input_filename or input_path).stem}.zip"
+            zip_path.parent.mkdir(exist_ok=True)
+            with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_STORED) as zf:
+                for f in output_files:
+                    zf.write(f, arcname=f.name)
+            logger.info(
+                f"Bundled {len(output_files)} output files into {zip_path.name}: "
+                f"{[f.name for f in output_files]}"
+            )
+            output_file = zip_path
         output_filename = output_file.name
 
         logger.info(f"Conversion complete. Output file: {output_filename}")

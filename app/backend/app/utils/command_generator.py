@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional
 from utils.globals import KCC_PATH
 from utils.enhanced_logger import setup_enhanced_logging, log_with_context
 from utils.enums.advanced_options import ADVANCED_OPTIONS_BY_KEY
+from utils.kcc_formats import normalize_output_format, sanitize_custom_resolution
 
 logger = setup_enhanced_logging()
 
@@ -83,7 +84,30 @@ def generate_command(options: Dict[str, Any], job_id: str = None, user_id: str =
     output_dir = options.get("output_dir", "")
     # Use session_key as fallback before defaulting to a UUID
     device_profile = options.get("device_profile", "")
-    advanced_options = options.get("advanced_options", {}) or {}
+    advanced_options = dict(options.get("advanced_options", {}) or {})
+
+    # Normalise the output format to KCC's canonical -f value ("mobi" -> "MOBI",
+    # "" / "Auto" -> not sent). Unknown values raise instead of being dropped silently.
+    if "output_format" in advanced_options:
+        fmt = normalize_output_format(advanced_options.get("output_format"))
+        if fmt:
+            advanced_options["output_format"] = fmt
+        else:
+            advanced_options.pop("output_format")
+
+    # Custom width/height turn KCC's profile into "Custom" (see kcc_c2e_wrapper.py for
+    # the MOBI fix). Values equal to the profile's native resolution are dropped so the
+    # real profile is used.
+    advanced_options, notes = sanitize_custom_resolution(device_profile, advanced_options)
+    for note in notes:
+        log_with_context(
+            logger,
+            "warning",
+            note,
+            job_id=job_id,
+            user_id=user_id,
+            source="command_generator",
+        )
 
     # No auto-correction - frontend should only send what user explicitly changed
     # KCC will use its own defaults based on device profile

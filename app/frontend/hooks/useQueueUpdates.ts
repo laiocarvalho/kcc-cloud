@@ -20,6 +20,7 @@ export interface QueueJob {
     percentage: number
   }
   queue_position?: number
+  error_message?: string
 }
 
 export interface QueueStatus {

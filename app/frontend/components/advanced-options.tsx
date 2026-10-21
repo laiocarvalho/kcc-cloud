@@ -54,6 +54,9 @@ export function AdvancedOptions({ options, onChange, deviceProfile, contentType 
   }
 
   const handleSelectChange = (field: keyof AdvancedOptionsType, value: string) => {
+    // Radix Select can emit a spurious onValueChange("") (radix-ui/primitives#3135),
+    // which would silently reset the choice (e.g. output format back to nothing).
+    if (value === "" || value === undefined || value === null) return
     onChange({ [field]: field === "splitter" ? Number.parseInt(value) : value })
   }
 
@@ -442,6 +445,7 @@ export function AdvancedOptions({ options, onChange, deviceProfile, contentType 
                     <SelectItem value="EPUB">EPUB</SelectItem>
                     <SelectItem value="CBZ">CBZ</SelectItem>
                     <SelectItem value="KFX">KFX</SelectItem>
+                    <SelectItem value="PDF">PDF</SelectItem>
                     <SelectItem value="MOBI+EPUB">MOBI+EPUB</SelectItem>
                   </SelectContent>
                 </Select>
